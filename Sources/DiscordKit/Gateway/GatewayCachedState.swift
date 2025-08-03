@@ -32,12 +32,31 @@ public class CachedState: ObservableObject {
     /// Populates the cache using the provided event.
     /// - Parameter event: An incoming Gateway "ready" event.
     func configure(using event: ReadyEvt) {
-        event.guilds.forEach(appendOrReplace(_:))
-        dms = event.private_channels
+        for guildResult in event.guilds {
+            do {
+                let guild = try guildResult.unwrap()
+                appendOrReplace(guild)
+            } catch {
+                print("Failed to decode guild: \(error)")
+            }
+        }
+        dms = event.private_channels.compactMap { channelResult in
+            do {
+                return try channelResult.unwrap()
+            } catch {
+                print("Failed to decode DM channel: \(error)")
+                return nil
+            }
+        }
         user = event.user
         event.users.forEach(appendOrReplace(_:))
         event.merged_members.enumerated().forEach { (idx, guildMembers) in
-            members[event.guilds[idx].id] = guildMembers.first(where: { $0.user_id == event.user.id })
+            do {
+                let guild = try event.guilds[idx].unwrap()
+                members[guild.id] = guildMembers.first(where: { $0.user_id == event.user.id })
+            } catch {
+                print("Failed to unwrap guild at index \(idx): \(error)")
+            }
         }
         print(members)
     }
